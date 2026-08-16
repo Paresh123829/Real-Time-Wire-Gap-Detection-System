@@ -1,0 +1,44 @@
+{
+  "image1.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "HORIZONTAL",
+    "status": "NORMAL"
+  },
+  "image2.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "HORIZONTAL",
+    "status": "NORMAL"
+  },
+  "image3.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "VERTICAL",
+    "status": "NORMAL"
+  },
+  "image4.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "VERTICAL",
+    "status": "NORMAL"
+  },
+  "image5.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "HORIZONTAL",
+    "status": "NORMAL"
+  },
+  "image6.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "VERTICAL",
+    "status": "NORMAL"
+  },
+  "image7.jpeg": {
+    "expected_wires": 48,
+    "visible_wires": 48,
+    "orientation": "HORIZONTAL",
+    "status": "NORMAL"
+  }
+}
