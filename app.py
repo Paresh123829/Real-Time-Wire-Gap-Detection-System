@@ -23,8 +23,14 @@ from src.wire_tracking import track_wires_across_strips, compute_robust_wire_pos
 from src.confidence import calculate_confidence
 from src.gap_measurement import evaluate_gaps
 from src.calibration import compute_pixels_per_mm
-from src.visualization import draw_wire_annotations, plot_1d_projection_profile
+from src.visualization import (
+    draw_wire_annotations,
+    plot_1d_projection_profile,
+    draw_straightness_annotations,
+    plot_straightness_deviations
+)
 from src.synthetic import generate_synthetic_wire_belt
+from src.straightness import evaluate_wire_straightness
 
 # Streamlit version compatibility helpers
 def st_image_compat(image, caption=None, width="stretch"):
@@ -135,7 +141,8 @@ if input_source_type == "Synthetic Demo Suite":
             "Scenario 5: Curved Wires (Sinusoidal Curvature)",
             "Scenario 6: Displaced Local Wire Portion",
             "Scenario 7: Reflection Artifact Glare Highlight",
-            "Scenario 8: Partial Wire Obscuration / Visibility"
+            "Scenario 8: Partial Wire Obscuration / Visibility",
+            "Scenario 9: Curved/Bent Wires (Straightness Defect)"
         ]
     )
     sc_key_map = {
@@ -146,7 +153,8 @@ if input_source_type == "Synthetic Demo Suite":
         "Scenario 5: Curved Wires (Sinusoidal Curvature)": "curved_wires",
         "Scenario 6: Displaced Local Wire Portion": "displaced_local_wire",
         "Scenario 7: Reflection Artifact Glare Highlight": "reflection_artifact",
-        "Scenario 8: Partial Wire Obscuration / Visibility": "partial_obscuration"
+        "Scenario 8: Partial Wire Obscuration / Visibility": "partial_obscuration",
+        "Scenario 9: Curved/Bent Wires (Straightness Defect)": "curved_wires"
     }
     sc_key = sc_key_map[scenario]
     input_image, _ = generate_synthetic_wire_belt(scenario=sc_key, num_wires=48)
@@ -230,6 +238,26 @@ else:
         min_value=1.0,
         max_value=100.0,
         step=1.0
+# --- WIRE STRAIGHTNESS CONFIGURATION ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📐 Straightness Configuration")
+enable_straightness = st.sidebar.checkbox("Enable Straightness Inspection", value=True, help="Evaluates wire curvature and peak-to-valley straightness deflection")
+
+if pixels_per_mm is not None:
+    max_straightness_tol = st.sidebar.number_input(
+        "Max Allowed Straightness Deflection (mm)",
+        value=float(config.DEFAULT_DEMO_MAX_STRAIGHTNESS_MM),
+        min_value=0.05,
+        max_value=5.0,
+        step=0.05
+    )
+else:
+    max_straightness_tol = st.sidebar.number_input(
+        "Max Allowed Straightness Deflection (px)",
+        value=float(config.DEFAULT_MAX_STRAIGHTNESS_DEV_PX),
+        min_value=0.5,
+        max_value=20.0,
+        step=0.5
     )
 
 # --- INDEPENDENT PARAMETERS ---
@@ -337,6 +365,15 @@ confidence_dict = calculate_confidence(
     tracking_support_score=robust_res['mean_support_score']
 )
 
+# 9. WIRE STRAIGHTNESS EVALUATION
+straightness_eval = evaluate_wire_straightness(
+    track_res['trajectories'],
+    strips,
+    orientation=orientation,
+    pixels_per_mm=pixels_per_mm,
+    max_straightness_tol=max_straightness_tol if enable_straightness else None
+)
+
 annotated_img = draw_wire_annotations(
     processed_roi,
     positions,
@@ -348,11 +385,19 @@ annotated_img = draw_wire_annotations(
     debug_mode=debug_mode
 )
 
+straightness_img = draw_straightness_annotations(
+    processed_roi,
+    straightness_eval,
+    orientation=orientation,
+    show_points=True
+)
+
 processing_time_ms = (time.time() - start_time) * 1000.0
 
 # --- DASHBOARD TABS ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab_straightness, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Inspection Dashboard",
+    "📐 Wire Straightness Analysis",
     "🔬 Pipeline Inspection & Debug",
     "📋 Gap Data Table",
     "🧪 Synthetic Test Suite",
@@ -370,28 +415,35 @@ with tab1:
     overall_status = gap_eval['overall_status']
     abnormal_count = gap_eval['abnormal_count']
     detected_count = len(positions)
+    straightness_status = straightness_eval['overall_status']
+    bent_count = straightness_eval['bent_wire_count']
 
     if overall_status == "ABNORMAL":
         st.markdown(f'<div class="status-abnormal">🚨 ALERT: ABNORMAL WIRE GAP DETECTED — {abnormal_count} Pair(s) Exceed Threshold ({gap_eval["threshold_label"]})</div>', unsafe_allow_html=True)
     elif detected_count != expected_wires:
         st.markdown(f'<div class="status-warning">⚠️ WARNING: WIRE COUNT MISMATCH — Detected {detected_count} of {expected_wires} Expected Wires</div>', unsafe_allow_html=True)
     else:
-        st.markdown('<div class="status-normal">✅ SYSTEM NORMAL — All Wire Gaps Within Permissible Parameters</div>', unsafe_allow_html=True)
+        st.markdown('<div class="status-normal">✅ GAP NORMAL — All Wire Gaps Within Permissible Parameters</div>', unsafe_allow_html=True)
+
+    if enable_straightness and straightness_status == "ABNORMAL":
+        st.markdown(f'<div class="status-abnormal" style="margin-top: 10px;">🚨 ALERT: BENT WIRES DETECTED — {bent_count} Wire(s) Exceed Straightness Limit ({straightness_eval["threshold_label"]})</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Key Metric Cards
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
-        st.metric("Overall Status", overall_status)
+        st.metric("Gap Status", overall_status)
     with col2:
-        st.metric("Detected Wires", f"{detected_count} / {expected_wires}")
+        st.metric("Straightness", straightness_status)
     with col3:
-        st.metric("Max Measured Gap", gap_eval['max_gap_display'])
+        st.metric("Detected Wires", f"{detected_count} / {expected_wires}")
     with col4:
-        st.metric("Spacing Consistency", f"{confidence_dict['spacing_consistency_pct']}%")
+        st.metric("Max Gap", gap_eval['max_gap_display'])
     with col5:
-        st.metric("Confidence Rating", confidence_dict['confidence_rating'])
+        st.metric("Max Deflection", straightness_eval['max_belt_dev_display'])
+    with col6:
+        st.metric("Confidence", confidence_dict['confidence_rating'])
 
     st.markdown("---")
 
@@ -401,13 +453,85 @@ with tab1:
     else:
         st.info("ℹ️ **Mode B (Measurement & Gap Analysis)**: Evaluating adjacent pitch, physical empty gap, and abnormality thresholds.")
 
-    st.subheader(f"Annotated Inspection Visual Overlay ({image_title})")
-    st_image_compat(cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB))
+    view_mode = st.radio("Inspection View Mode", ["Wire Gap Centerlines & Alerts", "Wire Straightness Trajectories", "Side-by-Side Comparison"], horizontal=True)
+
+    if view_mode == "Wire Gap Centerlines & Alerts":
+        st.subheader(f"Annotated Inspection Visual Overlay ({image_title})")
+        st_image_compat(cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB))
+    elif view_mode == "Wire Straightness Trajectories":
+        st.subheader(f"Wire Straightness & Deflection Trajectories ({image_title})")
+        st_image_compat(cv2.cvtColor(straightness_img, cv2.COLOR_BGR2RGB))
+    else:
+        st.subheader(f"Side-by-Side Inspection Overlay ({image_title})")
+        c_v1, c_v2 = st.columns(2)
+        with c_v1:
+            st.markdown("##### Wire Gap Overlay")
+            st_image_compat(cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB))
+        with c_v2:
+            st.markdown("##### Wire Straightness Overlay")
+            st_image_compat(cv2.cvtColor(straightness_img, cv2.COLOR_BGR2RGB))
 
     if abnormal_count > 0:
         st.error(f"### 🚨 Flagged Abnormal Wire Pairs ({abnormal_count})")
         ab_df = pd.DataFrame(gap_eval['abnormal_pairs'])
         st.table(ab_df[['pair_id', 'pos1_px', 'pos2_px', 'pitch_display', 'physical_gap_display']])
+
+    if enable_straightness and bent_count > 0:
+        st.error(f"### 🚨 Flagged Bent Wires ({bent_count})")
+        bent_df = pd.DataFrame(straightness_eval['bent_wires'])
+        st.table(bent_df[['wire_label', 'points_count', 'max_dev_display', 'ptv_display', 'slope_angle_deg', 'status']])
+
+# === TAB: WIRE STRAIGHTNESS ANALYSIS ===
+with tab_straightness:
+    st.subheader("Wire Straightness & Curvature Analysis (GD&T ISO 1101)")
+
+    st_stat = straightness_eval['overall_status']
+    st_bent = straightness_eval['bent_wire_count']
+    if st_stat == "ABNORMAL":
+        st.markdown(f'<div class="status-abnormal">🚨 ALERT: BENT WIRES DETECTED — {st_bent} Wire(s) Exceed Permissible Tolerance ({straightness_eval["threshold_label"]})</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="status-normal">✅ STRAIGHTNESS NORMAL — All Wires Within Tolerance Limit ({straightness_eval["threshold_label"]})</div>', unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    c_st1, c_st2, c_st3, c_st4 = st.columns(4)
+    with c_st1:
+        st.metric("Straightness Status", st_stat)
+    with c_st2:
+        st.metric("Bent Wires Count", f"{st_bent} / {straightness_eval['total_evaluated_wires']}")
+    with c_st3:
+        st.metric("Max Belt Deflection", straightness_eval['max_belt_dev_display'])
+    with c_st4:
+        st.metric("Mean Belt Deflection", f"{straightness_eval['mean_belt_dev_px']:.2f} px")
+
+    st.markdown("---")
+
+    col_str_img, col_str_plot = st.columns([1, 1])
+    with col_str_img:
+        st.markdown("#### Tracked Wire Centerline Trajectories")
+        st_image_compat(cv2.cvtColor(straightness_img, cv2.COLOR_BGR2RGB), caption=f"Straightness Trajectories ({straightness_eval['overall_status']})")
+    with col_str_plot:
+        st.markdown("#### Straightness Deflection per Wire vs Tolerance Limit")
+        fig_st = plot_straightness_deviations(straightness_eval)
+        st.pyplot(fig_st)
+
+    st.markdown("---")
+    st.markdown("#### Complete Per-Wire Straightness Measurement Log")
+    if len(straightness_eval['wires_data']) > 0:
+        df_str = pd.DataFrame(straightness_eval['wires_data'])
+        cols_to_show = ['wire_label', 'points_count', 'max_dev_px', 'max_dev_display', 'peak_to_valley_px', 'ptv_display', 'slope_angle_deg', 'threshold_display', 'status']
+        st_dataframe_compat(df_str[cols_to_show])
+
+        csv_str_bytes = df_str.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download Straightness Measurement Log (CSV)",
+            data=csv_str_bytes,
+            file_name="wire_straightness_log.csv",
+            mime="text/csv"
+        )
+    else:
+        st.warning("Insufficient wires detected to evaluate straightness.")
+
 
 # === TAB 2: PIPELINE INSPECTION & DEBUG ===
 with tab2:
@@ -474,7 +598,7 @@ with tab3:
 
 # === TAB 4: SYNTHETIC TEST SUITE ===
 with tab4:
-    st.subheader("Synthetic Demonstration Suite — 8 Edge-Case Scenarios")
+    st.subheader("Synthetic Demonstration Suite — 9 Edge-Case Scenarios")
     st.markdown("Select a scenario from the sidebar to evaluate edge cases:")
 
     col_s1, col_s2, col_s3 = st.columns(3)
@@ -484,11 +608,12 @@ with tab4:
         st.warning("⚠️ **Scenario 3: Missing Wire**\n\n47 wires -> WARNING: Count Mismatch.")
     with col_s2:
         st.info("ℹ️ **Scenario 4: Illumination Noise**\n\nSensor noise -> Maintains stable wire detection.")
-        st.info("ℹ️ **Scenario 5: Curved Wires**\n\nSinusoidal curvature -> Multi-strip tracking succeeds.")
+        st.error("🚨 **Scenario 5: Curved Wires**\n\nSinusoidal curvature -> Straightness Defect ABNORMAL.")
         st.error("🚨 **Scenario 6: Displaced Local Wire**\n\nLocal portion shift -> Local abnormal gap identified.")
     with col_s3:
         st.info("ℹ️ **Scenario 7: Reflection Artifact**\n\nBright glare -> Monotonic tracking rejects false glare.")
         st.info("ℹ️ **Scenario 8: Partial Obscuration**\n\nShadow block -> Maintains tracking support.")
+        st.error("🚨 **Scenario 9: Curved/Bent Wires**\n\nStraightness defect -> Flags Bent Wires in Straightness tab.")
 
 # === TAB 5: BENCHMARKS & EVALUATION ===
 with tab5:

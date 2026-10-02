@@ -90,6 +90,14 @@ def generate_synthetic_wire_belt(scenario='normal', num_wires=48, image_size=(80
                     pts.append((base_coord + shift, y_val))
                 for i in range(len(pts) - 1):
                     cv2.line(canvas, pts[i], pts[i+1], (15, 15, 15), wire_radius * 2)
+            elif scenario == 'single_bent_wire' and idx == 20:
+                pts = []
+                for y_val in range(45, h - 45, 5):
+                    rel_y = (y_val - 45) / float(h - 90)
+                    bow = 8.0 * np.sin(rel_y * np.pi)
+                    pts.append((int(round(base_coord + bow)), y_val))
+                for i in range(len(pts) - 1):
+                    cv2.line(canvas, pts[i], pts[i+1], (15, 15, 15), wire_radius * 2)
             else:
                 cv2.line(canvas, (base_coord, 45), (base_coord, h - 45), (15, 15, 15), wire_radius * 2)
                 cv2.line(canvas, (base_coord - 1, 45), (base_coord - 1, h - 45), (70, 70, 70), 1)
@@ -99,6 +107,14 @@ def generate_synthetic_wire_belt(scenario='normal', num_wires=48, image_size=(80
                 for x_val in range(45, w - 45, 5):
                     curve_y = int(base_coord + 6.0 * np.sin(x_val / 40.0))
                     pts.append((x_val, curve_y))
+                for i in range(len(pts) - 1):
+                    cv2.line(canvas, pts[i], pts[i+1], (15, 15, 15), wire_radius * 2)
+            elif scenario == 'single_bent_wire' and idx == 20:
+                pts = []
+                for x_val in range(45, w - 45, 5):
+                    rel_x = (x_val - 45) / float(w - 90)
+                    bow = 8.0 * np.sin(rel_x * np.pi)
+                    pts.append((x_val, int(round(base_coord + bow))))
                 for i in range(len(pts) - 1):
                     cv2.line(canvas, pts[i], pts[i+1], (15, 15, 15), wire_radius * 2)
             else:

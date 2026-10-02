@@ -19,6 +19,8 @@ The system inspects a continuous industrial wire belt consisting of **48 paralle
 8. **Detection Confidence Engine**: Evaluates system reliability (`HIGH`, `MEDIUM`, `LOW`) based on spacing consistency %, wire count match, and peak prominence.
 9. **Visual Overlay & Alert Banners**: Draws wire centerlines, numbers wires 1–48, draws green/red gap indicators, and displays alert banners.
 10. **Interactive Streamlit Dashboard**: Provides tabbed views for inspection, step-by-step pipeline inspection, measurement data table with CSV export, synthetic edge-case demo suite, and FPS benchmarks.
+11. **Wire Straightness & Deflection Analysis (GD&T ISO 1101)**: Tracks multi-strip 2D coordinates along the belt, fits least-squares straight lines, and evaluates peak-to-valley runout and max deflection to detect bent, bowed, or curved wires with configurable tolerance limits (px/mm).
+
 
 ---
 
@@ -138,6 +140,7 @@ pip install -r requirements.txt
 To run unit tests verifying all 5 test scenarios (Normal Spacing, Abnormal Gap, Missing Wire, Noise Stability, Slight Shift):
 ```bash
 python tests/test_detection.py
+python tests/test_straightness.py
 ```
 
 ### 4. Launch the Streamlit Inspection Dashboard

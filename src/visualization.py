@@ -133,3 +133,98 @@ def plot_1d_projection_profile(
     fig.tight_layout()
 
     return fig
+
+def draw_straightness_annotations(
+    roi,
+    straightness_results,
+    orientation='HORIZONTAL',
+    show_points=True
+):
+    """
+    Draws visual overlay highlighting wire straightness trajectories:
+    - Normal wires drawn with cyan trajectories.
+    - Bent wires highlighted with bold RED paths and alert callouts.
+    - Multi-strip tracked points highlighted with circles.
+    """
+    annotated = roi.copy()
+    if len(annotated.shape) == 2:
+        annotated = cv2.cvtColor(annotated, cv2.COLOR_GRAY2BGR)
+
+    h, w = annotated.shape[:2]
+    wires_data = straightness_results.get('wires_data', [])
+
+    for w_info in wires_data:
+        points = w_info.get('points_2d', [])
+        is_bent = w_info.get('is_bent', False)
+        w_label = w_info.get('wire_label', '')
+        max_dev_disp = w_info.get('max_dev_display', '')
+
+        line_color = (0, 0, 255) if is_bent else (255, 180, 0)
+        thickness = 2 if is_bent else 1
+
+        if len(points) >= 2:
+            pts_array = np.array(points, dtype=np.int32).reshape((-1, 1, 2))
+            cv2.polylines(annotated, [pts_array], isClosed=False, color=line_color, thickness=thickness)
+
+            if show_points:
+                for pt in points:
+                    cv2.circle(annotated, (int(pt[0]), int(pt[1])), 2, (0, 255, 255), -1)
+
+            if is_bent:
+                mid_pt = points[len(points) // 2]
+                callout_x, callout_y = int(mid_pt[0]), int(mid_pt[1])
+                callout_text = f"ALERT: {w_label} BENT ({max_dev_disp})"
+                
+                (tw, th), _ = cv2.getTextSize(callout_text, cv2.FONT_HERSHEY_SIMPLEX, 0.4, 1)
+                bx = max(5, min(w - tw - 10, callout_x + 8))
+                by = max(th + 5, min(h - 5, callout_y))
+                cv2.rectangle(annotated, (bx - 2, by - th - 2), (bx + tw + 4, by + 4), (0, 0, 180), -1)
+                cv2.putText(annotated, callout_text, (bx, by), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+
+    status_str = f"Straightness: {straightness_results.get('overall_status', 'NORMAL')} | Bent Wires: {straightness_results.get('bent_wire_count', 0)} | Max Dev: {straightness_results.get('max_belt_dev_display', 'N/A')}"
+    cv2.putText(annotated, status_str, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (255, 255, 255), 1)
+
+    return annotated
+
+def plot_straightness_deviations(straightness_results):
+    """
+    Plots a bar chart of straightness deviation for each wire vs permissible tolerance threshold.
+    """
+    fig, ax = plt.subplots(figsize=(10, 3.2), dpi=100)
+
+    wires = straightness_results.get('wires_data', [])
+    is_calibrated = straightness_results.get('is_calibrated', False)
+    threshold = straightness_results.get('threshold_val', 2.0)
+
+    if not wires:
+        ax.text(0.5, 0.5, "No wire straightness data available", ha='center', va='center')
+        return fig
+
+    labels = [w['wire_label'] for w in wires]
+    x = np.arange(len(wires))
+
+    if is_calibrated:
+        deviations = [w['max_dev_mm'] if w['max_dev_mm'] is not None else 0.0 for w in wires]
+        y_label = "Max Deviation (mm)"
+    else:
+        deviations = [w['max_dev_px'] for w in wires]
+        y_label = "Max Deviation (px)"
+
+    colors = ['#EF4444' if w['is_bent'] else '#10B981' for w in wires]
+
+    ax.bar(x, deviations, color=colors, width=0.65, edgecolor='#334155', linewidth=0.5)
+
+    ax.axhline(y=threshold, color='#DC2626', linestyle='--', linewidth=1.5,
+               label=f"Tolerance Limit ({straightness_results.get('threshold_label', '')})")
+
+    ax.set_title("Wire Straightness Deflection per Wire (GD&T Max Deviation)", fontsize=11, fontweight='bold')
+    ax.set_xlabel("Wire Number", fontsize=9)
+    ax.set_ylabel(y_label, fontsize=9)
+    ax.set_xticks(x[::2])
+    ax.set_xticklabels(labels[::2], rotation=45, fontsize=8)
+    ax.grid(True, linestyle=':', alpha=0.5, axis='y')
+    ax.legend(loc='upper right', fontsize=8)
+    fig.tight_layout()
+
+    return fig
+

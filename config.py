@@ -27,6 +27,10 @@ MIN_JUMP_PX = 3                       # Minimum jump limit floor in pixels
 DEFAULT_PIXELS_PER_MM = None          # Uncalibrated mode by default
 DEFAULT_DEMO_MAX_GAP_MM = 2.0         # Demo threshold limit (NOT an engineering spec)
 
+# Wire Straightness Evaluation Parameters
+DEFAULT_MAX_STRAIGHTNESS_DEV_PX = 2.0      # Maximum permissible straightness deviation in pixels (uncalibrated)
+DEFAULT_DEMO_MAX_STRAIGHTNESS_MM = 0.25    # Demo permissible straightness deviation in mm (calibrated)
+
 # Peak & Detection Parameters
 MIN_DISTANCE_FACTOR = 0.55            # Minimum peak distance factor relative to pitch
 SMOOTHING_KSIZE = 5                   # Gaussian blur kernel for projection profile
