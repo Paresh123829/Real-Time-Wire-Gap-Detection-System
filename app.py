@@ -238,6 +238,8 @@ else:
         min_value=1.0,
         max_value=100.0,
         step=1.0
+    )
+
 # --- WIRE STRAIGHTNESS CONFIGURATION ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("📐 Straightness Configuration")
